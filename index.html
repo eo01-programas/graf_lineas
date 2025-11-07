@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>%Ef – Línea con etiquetas (tablet 8")</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wrap-max: 720px;  /* ancho cómodo para ~8" */
+    --chart-h: 260px;   /* alto del gráfico */
+  }
+  body{margin:0; font-family:'Inter',system-ui,Segoe UI,Roboto,Arial,sans-serif; background:#f6f9fb;}
+  .wrap{max-width:var(--wrap-max); margin:20px auto; padding:0 12px;}
+  h1{font-weight:800; margin:6px 0 14px; font-size:clamp(18px,4.2vw,26px)}
+  .panel{background:#fff; border:1px solid #e8eef3; border-radius:12px; padding:12px; box-shadow:0 8px 20px rgba(2,18,31,.1)}
+  .chart-box{position:relative; width:100%; height:var(--chart-h);}
+  #chart{display:block; width:100% !important; height:100% !important;}
+
+  @media (max-width: 820px){
+    :root{ --wrap-max: 680px; --chart-h: 230px; }
+  }
+  @media (max-width: 600px){
+    :root{ --wrap-max: 560px; --chart-h: 200px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>%Ef (desde Google Sheet)</h1>
+  <div class="panel">
+    <div class="chart-box">
+      <canvas id="chart"></canvas>
+    </div>
+    <div style="color:#6b7280;font-size:12px;margin-top:6px">
+      Fuente: Hoja <b>db</b> (A=Item, B=%Ef).
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js y plugin de DataLabels -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+<script>
+  // Ajustes suaves para tablet
+  const small = window.matchMedia('(max-width: 820px)').matches;
+  const TICK_SIZE = small ? 10 : 12;
+  const POINT_R   = small ? 3  : 4;
+
+  // Registrar plugin de datalabels
+  Chart.register(ChartDataLabels);
+
+  // Callback que invoca Google (JSONP)
+  function handleData(json){
+    const rows = (json && json.table && json.table.rows) ? json.table.rows : [];
+    const labels = [], values = [];
+    rows.forEach(r => {
+      const item = r.c?.[0]?.v;
+      const v = r.c?.[1]?.v; // 0..1
+      if(item!=null && v!=null){ labels.push(String(item)); values.push(Number(v)); }
+    });
+
+    if(!labels.length){
+      document.getElementById('chart').replaceWith('No hay datos para graficar.');
+      return;
+    }
+
+    const nfPct = (v)=> new Intl.NumberFormat('es-PE',{style:'percent',maximumFractionDigits:0}).format(v);
+
+    const ctx = document.getElementById('chart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: { 
+        labels, 
+        datasets: [{
+          label: '%Ef',
+          data: values,
+          borderWidth: 2,
+          fill: false,
+          tension: 0.25,              // suavizado
+          pointRadius: POINT_R,
+          pointHoverRadius: POINT_R + 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        resizeDelay: 200,
+        scales:{
+          y:{ beginAtZero:true, suggestedMax:1,
+              ticks:{ font:{ size:TICK_SIZE }, callback:(v)=> nfPct(v) },
+              grid:{ color:'#eef3f6' } },
+          x:{ ticks:{ font:{ size:TICK_SIZE }, maxRotation:0, autoSkip:true, maxTicksLimit:8 } }
+        },
+        plugins:{
+          legend:{ display:false },
+          tooltip:{ callbacks:{ label:ctx=>' '+ nfPct(ctx.parsed.y) } },
+          // Etiquetas de datos sobre cada punto
+          datalabels:{
+            formatter:(v)=> nfPct(v),
+            align:'top',
+            anchor:'end',
+            offset: 4,
+            clamp: true,
+            font:{ weight:'600', size: TICK_SIZE }
+          }
+        },
+        animation:{ duration:450 }
+      }
+    });
+  }
+</script>
+
+<!-- Datos (GViz JSONP) -->
+<script src="https://docs.google.com/spreadsheets/d/1-UswugaqnY8HW_NSTbYe39dMB77q_ke25FzlqCGml2k/gviz/tq?tqx=out:json;responseHandler:handleData&sheet=db&tq=select%20A%2C%20B%20where%20A%20is%20not%20null"></script>
+</body>
+</html>
